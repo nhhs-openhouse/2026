@@ -270,6 +270,26 @@ details.acc summary .count-badge { font: 800 .74rem/1 var(--f-body); color: var(
 .faq-group h3 { font-size: .8rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-family: var(--f-body); font-weight: 800; }
 details.acc .ans { color: var(--muted); }
 details.acc .ans a { font-weight: 700; }
+/* FAQ answers from the Google Doc: paragraphs, lists, tables, images */
+.ans.rich { display: grid; gap: 10px; min-width: 0; }
+.ans.rich > * { margin: 0; }
+.ans.rich strong { color: var(--ink); }
+.ans.rich h4 { font: 700 .95rem/1.3 var(--f-display); color: var(--ink); }
+.ans.rich ul, .ans.rich ol { padding-left: 1.3em; display: grid; gap: 4px; }
+.ans.rich li > ul, .ans.rich li > ol { margin-top: 4px; }
+.ans.rich .tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+.ans.rich table { border-collapse: collapse; width: 100%; font-size: .92rem; }
+.ans.rich th, .ans.rich td { text-align: left; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.ans.rich tr:last-child td { border-bottom: 0; }
+.ans.rich th { background: var(--silver-soft); color: var(--ink); font-weight: 800; }
+.ans.rich td:first-child { color: var(--ink); font-weight: 600; }
+.ans.rich img { display: block; max-width: 100%; height: auto; min-height: 60px; border-radius: 8px; background: var(--silver-soft); cursor: zoom-in; }
+.ans.rich img[src] { min-height: 0; background: none; }
+#zoom { position: fixed; inset: 0; z-index: 50; background: rgba(10, 14, 32, .92); overflow: auto; display: grid; place-items: center; padding: 56px 12px 12px; cursor: zoom-out; }
+#zoom[hidden] { display: none; }
+#zoom img { max-width: none; width: auto; height: auto; background: #FFFFFF; border-radius: 6px; }
+@media (min-width: 900px) { #zoom img { width: auto; max-width: 100%; } }
+#zoom button { position: fixed; top: 10px; right: 12px; font: 700 .95rem/1 var(--f-body); color: #FFFFFF; background: rgba(255, 255, 255, .16); border: 0; border-radius: 999px; padding: 10px 16px; cursor: pointer; }
 .draft-note { background: var(--note-bg); color: var(--note-ink); border-radius: 10px; padding: 12px 14px; font-size: .9rem; font-weight: 600; }
 .ask { background: var(--surface); border: 1.5px dashed var(--silver); border-radius: var(--r); padding: 18px; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; }
 
@@ -464,6 +484,7 @@ footer.site-foot b { color: var(--on-navy); font-family: var(--f-display); }
     <label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="faqSearch" type="search" placeholder="Search questions" aria-label="Search questions"></label>
     <div id="faqList" style="display:grid;gap:24px"></div>
     <p id="faqEmpty" class="empty-note" hidden>No questions match that search.</p>
+    <p id="faqLoading" class="empty-note" hidden>Loading questions…</p>
     <div class="ask" id="askBox" hidden>
       <div><h3>Can't find your answer?</h3><p style="color:var(--muted)">Send us your question and our staff will reply by email.</p></div>
       <a class="btn btn-line" id="askLink" href="#" target="_blank" rel="noopener">Ask us a question</a>
@@ -541,15 +562,7 @@ let ONGOING = [
   { title: 'Self-Guided Tour', acts: 'Explore our campus at your own pace with our app-guided tour', cat: 'tour' }
 ];
 
-let FAQS = [
-  { g: 'About the event', q: 'When is the Open House?', a: 'Saturday, 21 November 2026, from 9:00 AM to 12:30 PM.' },
-  { g: 'About the event', q: 'Where is Nan Hua High School?', a: '41 Clementi Ave 1, Singapore 129956. [Open in Google Maps](https:\/\/www.google.com/maps/search/?api=1&query=41+Clementi+Ave+1+Singapore+129956).' },
-  { g: 'Programme', q: 'What can I see at the Open House?', a: 'Four showcases: the Holistic Education Showcase (CCA booths, performances, Speak to a Nanhuarian), the Curriculum Experiences Showcase (CnME modules, SIL Fiesta booths), the Niche Areas Showcase (Bicultural Experiences, Eco-Stewardship) and the School Tour (guided or self-guided).' },
-  { g: 'Programme', q: 'When are the performances?', a: 'Performances run from 9:30 AM to 12:30 PM at the Parade Square, Hall, Canteen and Level 2 Classrooms. See the [full schedule](#programme).' },
-  { g: 'Programme', q: 'Can I join a guided tour of the school?', a: 'Yes. Guided tours start at the Canteen. See the [Programme page](#programme) for timings. You can also explore at your own pace with our app-guided Self-Guided Tour.' },
-  { g: 'Programme', q: 'Can I talk to current students?', a: 'Yes. Drop by Speak to a Nanhuarian in the Hall at 9:45 AM, 11:15 AM or 12:15 PM.' },
-  { g: 'Before you come', q: 'Can I see the school before the day?', a: 'Watch the [campus tour and school film](#videos) on our Videos page.' }
-];
+let FAQS = [];
 
 let VIDEOS = [
   { title: 'Dear Younger Me | A Nan Hua High School Film', id: 'jTsFhp91-Oc', label: 'School film', big: true },
@@ -583,6 +596,7 @@ function applySheet(SHEET) {
 }
 const INLINE = readJSON(document.getElementById('sheetData').textContent);
 let saved = null;
+let faqPending = !INLINE && !!API;
 if (!INLINE) { try { saved = readJSON(localStorage.getItem(SAVED_KEY)); } catch (e) {} }
 applySheet(INLINE || saved);
 const $ = (s, r = document) => r.querySelector(s);
@@ -730,13 +744,46 @@ function selectLoc(id, scroll) {
 }
 
 /* FAQ */
+/* An answer from the FAQ Google Doc arrives as HTML built by Apps Script; one from the FAQ tab as plain text */
+function answerHTML(f) {
+  return f.html ? `<div class="ans rich">${f.html}</div>` : `<p class="ans">${rich(f.a)}</p>`;
+}
 function renderFaq() {
   const q = $('#faqSearch').value.trim().toLowerCase();
   const groups = {};
   FAQS.filter(f => !q || (f.q + ' ' + f.a).toLowerCase().includes(q)).forEach(f => (groups[f.g] = groups[f.g] || []).push(f));
   const keys = Object.keys(groups);
-  $('#faqList').innerHTML = keys.map(g => `<div class="faq-group"><h3>${esc(g)}</h3>${groups[g].map(f => `<details class="acc"${q ? ' open' : ''}><summary>${esc(f.q)}</summary><div class="body"><p class="ans">${rich(f.a)}</p></div></details>`).join('')}</div>`).join('');
-  $('#faqEmpty').hidden = keys.length > 0;
+  $('#faqList').innerHTML = keys.map(g => `<div class="faq-group"><h3>${esc(g)}</h3>${groups[g].map(f => `<details class="acc"${q ? ' open' : ''}><summary>${esc(f.q)}</summary><div class="body">${answerHTML(f)}</div></details>`).join('')}</div>`).join('');
+  $('#faqLoading').hidden = FAQS.length > 0 || !faqPending;
+  $('#faqEmpty').hidden = keys.length > 0 || !$('#faqLoading').hidden;
+  document.querySelectorAll('#faqList details[open]').forEach(loadImages);
+}
+/* FAQ images load when their question is opened. Apps Script sends each one as a data: address. */
+const faqImgs = {};
+function faqImage(n) {
+  if (!faqImgs[n]) faqImgs[n] = new Promise(done => {
+    if (window.google && google.script && google.script.run) google.script.run.withSuccessHandler(done).withFailureHandler(() => done('')).getFaqImage(n);
+    else if (API) fetch(API + '?img=' + n).then(r => r.text()).then(done, () => done(''));
+    else done('');
+  });
+  return faqImgs[n];
+}
+function loadImages(box) {
+  box.querySelectorAll('img[data-img]:not([src])').forEach(img => faqImage(img.dataset.img).then(src => { if (src) img.src = src; }));
+}
+function zoom(img) {
+  let z = $('#zoom');
+  if (!z) {
+    z = document.createElement('div');
+    z.id = 'zoom';
+    z.innerHTML = '<button type="button">Close ✕</button><img alt="">';
+    z.addEventListener('click', () => { z.hidden = true; });
+    document.body.appendChild(z);
+  }
+  z.querySelector('img').src = img.src;
+  z.querySelector('img').alt = img.alt;
+  z.hidden = false;
+  z.scrollTo(0, 0);
 }
 
 /* Settings: event details, videos, home image, "Ask us" link */
@@ -798,8 +845,12 @@ document.addEventListener('click', e => {
   if (v) { go('campus'); selectLoc(v.dataset.loc, true); return; }
   const p = e.target.closest('[data-pin]');
   if (p) { selectLoc(p.dataset.pin, window.innerWidth < 800); return; }
+  const zi = e.target.closest('.ans.rich img[src]');
+  if (zi) { zoom(zi); return; }
 });
+document.addEventListener('toggle', e => { if (e.target.open && e.target.closest('#faqList')) loadImages(e.target); }, true);
 document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && $('#zoom')) $('#zoom').hidden = true;
   const p = e.target.closest && e.target.closest('[data-pin]');
   if (p && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); selectLoc(p.dataset.pin, false); }
 });
@@ -814,10 +865,11 @@ function renderAll() {
 }
 renderAll();
 if (!INLINE && API) fetch(API + '?data=1').then(r => r.json()).then(d => {
-  if (!d) return;
+  faqPending = false;
+  if (!d) return renderFaq();
   try { localStorage.setItem(SAVED_KEY, JSON.stringify(d)); } catch (e) {}
   applySheet(d); renderAll();
-}).catch(() => {});
+}).catch(() => { faqPending = false; renderFaq(); });
 setInterval(() => { if (!$('#page-programme').hidden) renderProgramme(); }, 60000);
 </script>
 </body>
