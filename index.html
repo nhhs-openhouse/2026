@@ -769,7 +769,38 @@ function faqImage(n) {
   return faqImgs[n];
 }
 function loadImages(box) {
-  box.querySelectorAll('img[data-img]:not([src])').forEach(img => faqImage(img.dataset.img).then(src => { if (src) img.src = src; }));
+  box.querySelectorAll('img[data-img]:not([src]):not([data-busy])').forEach(img => {
+    img.dataset.busy = '1';
+    faqImage(img.dataset.img).then(src => src.startsWith('data:application/pdf') ? pdfPicture(src) : src).then(src => {
+      if (src) img.src = src;
+      // An image address from the Doc that can't be shown becomes a plain link to it
+      else if (img.dataset.url) img.outerHTML = `<${A} href="${esc(img.dataset.url)}" target="_blank" rel="noopener">${esc(img.alt || 'Open the image')} ↗</${A}>`;
+    });
+  });
+}
+/* Some image addresses (e.g. MOE infographics) are really PDFs: draw the first page as a picture with pdf.js, loaded only when needed */
+let pdfLib = null;
+function pdfPicture(dataUrl) {
+  const base = 'https:\/\/cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+  pdfLib = pdfLib || new Promise((ok, fail) => {
+    const s = document.createElement('script');
+    s.src = base + 'pdf.min.js';
+    s.onload = () => { pdfjsLib.GlobalWorkerOptions.workerSrc = base + 'pdf.worker.min.js'; ok(pdfjsLib); };
+    s.onerror = fail;
+    document.head.appendChild(s);
+  });
+  const bytes = Uint8Array.from(atob(dataUrl.split(',')[1]), c => c.charCodeAt(0));
+  return pdfLib.then(lib => lib.getDocument({ data: bytes }).promise).then(doc => doc.getPage(1)).then(page => {
+    const w = page.getViewport({ scale: 1 }).width;
+    const view = page.getViewport({ scale: Math.min(4, 2400 / w) });
+    const c = document.createElement('canvas');
+    c.width = Math.round(view.width);
+    c.height = Math.round(view.height);
+    const g = c.getContext('2d');
+    g.fillStyle = '#FFFFFF';
+    g.fillRect(0, 0, c.width, c.height);
+    return page.render({ canvasContext: g, viewport: view }).promise.then(() => c.toDataURL('image/png'));
+  }).catch(() => '');
 }
 function zoom(img) {
   let z = $('#zoom');
